@@ -48,7 +48,7 @@ export class Director {
     this.updateObjectives(dt);
     this.updateEvents();
     // scheduled actions
-    for (let i = this.pending.length - 1; i >= 0; i--) { const a = this.pending[i]; if (this.t >= a.at) { this.pending.splice(i, 1); this.run(a.act); } }
+    const due = this.pending.filter((a) => this.t >= a.at); if (due.length) { this.pending = this.pending.filter((a) => !due.includes(a)); for (const a of due) this.run(a.act); }
     // boundary
     const bz = (this.m.zones || []).find((z) => z.type === 'boundary');
     if (bz && this.allPrimaryDoneAt === null) {

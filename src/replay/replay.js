@@ -5,6 +5,7 @@ import { buildFighter, buildModel, buildMissileMesh } from '../aircraft/model.js
 import { Settings } from '../settings/settings.js';
 import dialogue from '../../data/dialogue.json';
 import { clamp, lerp } from '../util/math.js';
+import { disposeTree } from '../util/dispose.js';
 
 const r1 = (n) => Math.round(n * 10) / 10, r3 = (n) => Math.round(n * 1000) / 1000;
 const MAX_FRAMES = 3600, HZ = 6;
@@ -13,6 +14,7 @@ const MAX_FRAMES = 3600, HZ = 6;
 export class Recorder {
   constructor(game) {
     this.g = game; this.frames = []; this.events = []; this.acc = 0; this.meta = []; this.idx = new Map(); this.t = 0;
+    const m = game.mission; this.start = { env: m.env, base: m.base, zones: m.zones };   // travel() later replaces these on the mission
   }
   event(kind, pos, dir, extra) { this.events.push({ t: r3(this.t), k: kind, p: pos ? [r1(pos.x), r1(pos.y), r1(pos.z)] : null, x: extra ?? null }); }
   slot(key, kind, side) { if (!this.idx.has(key)) { this.idx.set(key, this.meta.length); this.meta.push({ kind, side }); } return this.idx.get(key); }
@@ -28,7 +30,7 @@ export class Recorder {
   }
   export() {
     const g = this.g, m = g.mission;
-    return { v: 1, title: m.title, id: m.id, env: m.env, base: m.base, zones: m.zones, spawn: m.spawn, paint: g.opts.paint, meta: this.meta, frames: this.frames, events: this.events, duration: this.t, date: Date.now() };
+    return { v: 1, title: m.title, id: m.id, env: this.start.env, base: this.start.base, zones: this.start.zones, spawn: m.spawn, paint: g.opts.paint, meta: this.meta, frames: this.frames, events: this.events, duration: this.t, date: Date.now() };
   }
 }
 
@@ -101,5 +103,5 @@ export class ReplaySession {
     const m = new THREE.Matrix4().lookAt(cam.position, look_, mode === 'TACTICAL' ? new THREE.Vector3(fwd.x, 0, fwd.z).normalize() : new THREE.Vector3(0, 1, 0)); const q = new THREE.Quaternion().setFromRotationMatrix(m);
     cam.quaternion.slerp(q, 1 - Math.exp(-10 * dt)); cam.updateProjectionMatrix();
   }
-  dispose() { this.world.clear(); this.scene.traverse((o) => { o.geometry?.dispose?.(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose?.()); }); this.scene.clear(); }
+  dispose() { this.world.clear(); disposeTree(this.scene); this.scene.clear(); }
 }

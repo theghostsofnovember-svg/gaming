@@ -35,7 +35,7 @@ export function createRenderer(canvas) {
       if (!state.dynamic || state.since < 1500) return;
       state.since = 0;
       if (state.frameAvg > 24 && state.scale > 0.55) { state.scale = Math.max(0.55, state.scale - 0.1); apply(); }
-      else if (state.frameAvg < 15 && state.scale < 1) { state.scale = Math.min(1, state.scale + 0.05); apply(); }
+      else if (state.frameAvg < 18 && state.scale < 1) { state.scale = Math.min(1, state.scale + 0.05); apply(); }
     },
     resize: apply
   };

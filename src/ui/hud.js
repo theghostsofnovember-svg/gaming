@@ -39,7 +39,7 @@ export class Hud {
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2); this.W = window.innerWidth; this.H = window.innerHeight; this.dpr = dpr;
     this.fc.width = this.W * dpr; this.fc.height = this.H * dpr; this.fc.style.width = this.W + 'px'; this.fc.style.height = this.H + 'px';
-    this.u = clamp(this.H / 1080, document.body.classList.contains('touch-on') ? 0.85 : 0.62, 1.5); const rs = Math.round(clamp(this.H * 0.21, document.body.classList.contains('touch-on') ? 100 : 130, 230));
+    this.u = clamp(this.H / 1080, document.body.classList.contains('touch-on') ? 0.65 : 0.62, 1.5); const rs = Math.round(clamp(this.H * 0.21, document.body.classList.contains('touch-on') ? 100 : 130, 230));
     this.rs = rs; this.rc.width = rs * dpr; this.rc.height = rs * dpr; this.rc.style.width = rs + 'px'; this.rc.style.height = rs + 'px';
   }
   fade(on) { this.fadeEl.classList.toggle('on', !!on); }
@@ -148,7 +148,7 @@ export class Hud {
     // ---- heading tape
     this.drawHeading(g, cx, 38 * u, u, f.heading, S);
     // ---- speed / altitude
-    const sx = cx - Math.min(W * 0.27, 400 * u), ax = cx + Math.min(W * 0.27, 400 * u);
+    const off = Math.min(W * (document.body.classList.contains('touch-on') ? 0.2 : 0.27), 400 * u), sx = cx - off, ax = cx + off;   // narrower on touch: keeps the tapes clear of the buttons
     this.drawTape(g, sx, cy, u, f.speed * 3.6, 'KM/H', 100, 'left', `M ${(f.speed / 340).toFixed(2)}`);
     this.drawTape(g, ax, cy, u, f.pos.y, 'ALT M', 100, 'right', f.agl < 1500 ? `AGL ${Math.round(f.agl)}` : `VS ${Math.round(f.vspeed)}`);
     // ---- G, throttle

@@ -24,8 +24,12 @@ class SaveStore {
   load() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const d = JSON.parse(raw); this.data = { ...fresh(), ...d, settings: { ...DEFAULT_SETTINGS, ...(d.settings || {}) }, owned: { ...fresh().owned, ...(d.owned || {}) }, equipped: { ...fresh().equipped, ...(d.equipped || {}) } }; }
-    } catch (e) { console.warn('save load failed', e); this.data = fresh(); }
+      if (raw) {
+        const d = JSON.parse(raw), f = fresh(), obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+        this.data = { ...f, ...obj(d), campaign: { ...f.campaign, ...obj(d.campaign) }, flags: obj(d.flags), scores: obj(d.scores), bestTimes: obj(d.bestTimes), challenges: obj(d.challenges),
+          settings: { ...DEFAULT_SETTINGS, ...obj(d.settings) }, owned: { ...f.owned, ...obj(d.owned) }, equipped: { ...f.equipped, ...obj(d.equipped) } };
+      }
+    } catch (e) { console.warn('save load failed', e); try { localStorage.setItem(KEY + '.corrupt', localStorage.getItem(KEY) || ''); } catch { /* ignore */ } this.data = fresh(); }
     this.loaded = true; return this.data;
   }
   commit() {

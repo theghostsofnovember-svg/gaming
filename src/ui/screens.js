@@ -51,7 +51,7 @@ export class Screens {
   s_menu() {
     const d = Save.data, ri = rankInfo(d.xp), has = Save.has() && d.campaign.started;
     const items = [['continue', 'CONTINUE', 'متابعة', !has], ['new', 'NEW CAMPAIGN', 'حملة جديدة'], ['missions', 'MISSIONS', 'المهام'], ['aircraft', 'AIRCRAFT', 'الطائرات'], ['freeflight', 'FREE FLIGHT', 'طيران حر'], ['challenges', 'CHALLENGES', 'التحديات'], ['replay', 'REPLAY', 'إعادة'], ['settings', 'SETTINGS', 'الإعدادات'], ['extras', 'EXTRAS', 'إضافات']];
-    this.root.innerHTML = `<div class="screen menu-screen dim"><div class="menu-col"><div class="brand"><div class="kicker">PROTOTYPE · VERTICAL SLICE</div><h1 class="title">Shadow Line<small>SKY OF ALGERIA</small></h1></div>
+    this.root.innerHTML = `<div class="screen menu-screen dim"><div class="menu-col"><div class="brand"><div class="kicker">15-MISSION CAMPAIGN</div><h1 class="title">Shadow Line<small>SKY OF ALGERIA</small></h1></div>
       ${items.map(([a, l, ar, dis]) => `<button class="btn ${a === 'continue' && !dis ? 'primary' : a === 'new' && !has ? 'primary' : ''}" data-act="menu_${a}" ${dis ? 'disabled' : ''}>${l}<span class="ar">${ar}</span></button>`).join('')}</div>
       <div class="pilot-card panel"><div class="kicker">PILOT</div><div style="font-size:22px;letter-spacing:.12em">SALIM BEN YOUNES</div><div class="mut mono">${ri.rank} · ${d.xp} XP · ${d.tokens} TOKENS</div><div class="xpbar"><i style="width:${Math.round(ri.progress * 100)}%"></i></div></div>
       <div class="menu-foot"><span class="foot-pilot">${ri.rank} · ${d.xp} XP · ${d.tokens} TOKENS<br></span>${has ? 'SAVE: ' + new Date(d.updated).toLocaleString() : 'NO SAVE FILE'} · ${Settings.s.difficulty}</div></div>`;
@@ -72,7 +72,7 @@ export class Screens {
 
   // ------------------------------------------------------------------ mission select (animated Algeria map)
   s_missions({ selected } = {}) {
-    selected = selected || (MISSIONS.find((m) => missionStatus(m) === 'available') || MISSIONS[0]).id; this.sel = selected;
+    if (!MISSIONS.some((m) => m.id === selected)) selected = (MISSIONS.find((m) => missionStatus(m) === 'available') || MISSIONS[0]).id; this.sel = selected;
     const locked = {}; for (const k of Object.keys(REGIONS)) locked[k] = true; for (const m of MISSIONS) if (missionStatus(m) !== 'locked') locked[regionFor(m)] = false;
     const markers = MISSIONS.map((m) => { const st = missionStatus(m), x = px(m.map.lon), y = py(m.map.lat), col = st === 'locked' ? '#667' : st === 'completed' ? '#5dffa8' : '#ffcf3d'; return `<g class="mk" data-act="pick" data-val="${m.id}" transform="translate(${x} ${y})"><g class="mk-in"><circle class="pulse" r="14" fill="none" stroke="${col}" stroke-width="2" ${st === 'available' ? '' : 'opacity="0"'}/><circle r="9" fill="${col}" opacity="${st === 'locked' ? 0.5 : 1}" stroke="#000" stroke-width="2"/><text y="-16" text-anchor="middle" font-size="19" fill="#fff" font-family="monospace" paint-order="stroke" stroke="#000" stroke-width="4">${String(m.number).padStart(2, '0')}</text></g></g>`; }).join('');
     this.root.innerHTML = `<div class="screen dark"><div class="back-bar"><button class="btn small" data-act="back">◂ MENU</button></div><div class="split">

@@ -18,7 +18,7 @@ export function steer(e, dt, desired, desiredSpeed, agility = 1) {
   let acc = d.thrust * thr * Math.max(0, 1 - vr * vr) - G * cur.y - 0.9 * vr * vr * d.thrust - e.bleed * 0.9 * Math.pow(Math.max(0, gl - 1), 1.35);
   e.speed = clamp(spd + acc * dt, 60, d.maxSpeed * 1.05); e.throttle = thr;
   // bank
-  _b.crossVectors(cur, desired); const side = Math.sign(_b.y) * clamp(rate / Math.max(d.maxTurn, 0.1), 0, 1);
+  _b.crossVectors(cur, desired); const side = -Math.sign(_b.y) * clamp(rate / Math.max(d.maxTurn, 0.1), 0, 1);
   e.bank += (side * 1.15 - e.bank) * Math.min(1, dt * 3);
   _a.crossVectors(cur, UPV); if (_a.lengthSq() < 1e-4) _a.set(1, 0, 0); _a.normalize(); // right
   _b.crossVectors(_a, cur).normalize();
@@ -226,12 +226,12 @@ export class Pilot {
         if (inc.length && this.flareCd <= 0 && Math.random() < g.diff().ai.flareChance * (0.6 + tr.skill * 0.6)) { w.dropFlares(e, 2); this.flareCd = 0.9; }
         if (this.timer > 1.2 && Math.random() < dt * 0.6) this.jinkDir *= -1;
         if (!inc.length && this.timer > 3.5) this.set(d.role === 'elite' || tr.aggression > 0.4 ? 'REPOSITION' : 'PATROL');
-        if (this.timer === 0) this.jinkDir = Math.random() < 0.5 ? -1 : 1;
+        if (this.timer <= dt * 1.5) this.jinkDir = Math.random() < 0.5 ? -1 : 1;
         break;
       }
       case 'REPOSITION': {
         if (!tgt) { this.set('PATROL'); break; }
-        if (this.timer < 0.05) { const side = Math.random() < 0.5 ? -1 : 1; this.reposPt.copy(tgt.pos).addScaledVector(tgt.forward(_c), -2600).add(new THREE.Vector3(side * 1400, rand(-100, 500), 0).applyQuaternion(tgt.quat)); }
+        if (this.timer <= dt * 1.5) { const side = Math.random() < 0.5 ? -1 : 1; this.reposPt.copy(tgt.pos).addScaledVector(tgt.forward(_c), -2600).add(new THREE.Vector3(side * 1400, rand(-100, 500), 0).applyQuaternion(tgt.quat)); }
         this.steerTo(dt, this.reposPt, d.maxSpeed, 0.9);
         this.jink -= dt; if (d.role === 'elite' && this.jink < 0) { this.jink = rand(1.5, 3); this.reposPt.add(new THREE.Vector3(rand(-500, 500), rand(-200, 300), rand(-500, 500))); }
         if ((energy > 0.72 && this.timer > 3) || this.timer > 9) this.set('INTERCEPT');

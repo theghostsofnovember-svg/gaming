@@ -5,6 +5,7 @@ import { buildTerrainMesh } from './terrain.js';
 import { Sky } from './sky.js';
 import { buildAirbase, buildCityLights } from './airbase.js';
 import { noise2 } from '../util/noise.js';
+import { disposeTree } from '../util/dispose.js';
 
 function seaNormalMap() {
   const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
@@ -103,7 +104,7 @@ export class World {
   clear() {
     for (const c of [...this.root.children]) {
       this.root.remove(c);
-      c.traverse?.((o) => { o.geometry?.dispose?.(); if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.map?.dispose?.(); m.dispose?.(); }); } });
+      disposeTree(c);
     }
     this.sea = null; this.base = null; this.city = null; this.veg = null;
   }

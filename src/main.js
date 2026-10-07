@@ -1,5 +1,4 @@
 import aircraftData from '../data/aircraft.json';
-import difficultyData from '../data/difficulty.json';
 import { createRenderer } from './renderer.js';
 import { AudioEngine } from './audio/audio.js';
 import { Input } from './input/input.js';
@@ -36,12 +35,20 @@ class App {
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.game && !this.game.paused && !this.game.ended) this.togglePause(); });
   }
   boot() {
-    const firstRun = !Save.has(); Save.load();
+    const firstRun = !Save.has(); Save.load(); this.sanitizeEquipped();
     if (firstRun && Settings.touchMode()) { Save.data.settings.quality = 'medium'; Save.commit(); }   // phones start on the lighter preset
     Settings.apply(); this.applySettings(); this.unlockedCameras = unlockedCameraSet();
     const q = new URLSearchParams(location.search);
     if (q.get('quick')) { this.audio.ensure(); this.launchMission(MISSIONS[0]); } else this.screens.show('title');
     requestAnimationFrame((t) => this.frame(t));
+  }
+  /** Falls back to defaults when a saved loadout id no longer exists in the data. */
+  sanitizeEquipped() {
+    const E = Save.data.equipped, ok = (list, id) => list.some((x) => x.id === id);
+    if (!ok(aircraftData.aircraft, E.aircraft)) E.aircraft = aircraftData.aircraft[0].id;
+    if (!ok(aircraftData.paints, E.paint)) E.paint = aircraftData.paints[0].id;
+    if (!ok(aircraftData.hudThemes, E.hudTheme)) E.hudTheme = aircraftData.hudThemes[0].id;
+    if (!ok(aircraftData.loadouts, E.loadout)) E.loadout = (aircraftData.loadouts[1] || aircraftData.loadouts[0]).id;
   }
   toast(text) {
     const d = document.createElement('div'); d.className = 'toast warn'; d.textContent = text; Object.assign(d.style, { position: 'fixed', top: '7%', left: '50%', transform: 'translateX(-50%)', zIndex: 50 });
@@ -82,17 +89,17 @@ class App {
 
   // ------------------------------------------------------------------ mission outcome -> save -> debrief
   onMissionFinished(game) {
-    const m = game.mission, snap = game.snapshot(), diff = difficultyData.levels[game.diffName];
+    const m = game.mission, snap = game.snapshot(), diff = game.diffData;
     const score = scoreMission(m, snap, diff), rep = game.rec.export(); if (rep.frames.length > 3) { this.lastReplay = rep; Save.saveReplay(rep); }
     this.lastResult = { snap, score };
-    const d = Save.data, kind = m.kind, good = snap.result === 'complete'; let saved = false, final = false;
+    const d = Save.data, kind = m.kind, good = snap.result === 'complete'; let saved = false, final = false, bonus = false;
     const beforeXp = d.xp, ri0 = rankInfo(beforeXp);
     if (kind === 'campaign') {
       if (good) { d.campaign.completed[m.id] = true; }
       const prev = d.scores[m.id]; if (good && (!prev || score.score > prev.score)) d.scores[m.id] = { grade: score.grade, score: score.score, time: score.time, medals: score.medals, accuracy: score.acc };
       if (good && (!d.bestTimes[m.id] || score.time < d.bestTimes[m.id])) d.bestTimes[m.id] = score.time;
       d.xp += score.xp; d.tokens += score.tokens; saved = true;
-      if (good && m.number === MISSIONS.length) { d.campaign.finished = true; d.flags = { ...(d.flags || {}), campaignFinished: true }; d.tokens += 5; score.tokens += 5; final = true; }
+      if (good && m.number === MISSIONS.length) { final = true; if (!d.campaign.finished) { d.tokens += 5; score.tokens += 5; bonus = true; } d.campaign.finished = true; d.flags = { ...(d.flags || {}), campaignFinished: true }; }
     } else if (kind === 'challenge') {
       const cid = m.id.replace(/^ch_/, ''), prev = d.challenges[cid];
       if (good && (!prev || score.score > prev.score)) d.challenges[cid] = { grade: score.grade, score: score.score, time: score.time };
@@ -103,18 +110,18 @@ class App {
     const idx = MISSIONS.findIndex((x) => x.id === m.id), next = kind === 'campaign' && good ? MISSIONS[idx + 1] : null;
     const launch = this.lastLaunch; game.dispose(); this.game = null; this.input.enabled = false; this.audio.setAmbience('hangar'); this.audio.setMusic('IDLE');
     const retry = m.oneLife && !good ? null : () => this.start(launch.def, launch.kind, launch.extra);
-    this.screens.show('debrief', { result: snap.result, snap, score, rank: { before: ri0.index === ri1.index ? ri0.progress : ri0.progress, after: ri1.progress, name: ri1.rank, up: ri1.index > ri0.index }, unlocks: [...unlocks, ...(final ? ['PAINT: Shadow Line', 'HUD THEME: Crimson', 'CAMPAIGN COMPLETE: +5 TOKENS'] : [])], mission: m, saved, retry, next, final });
+    this.screens.show('debrief', { result: snap.result, snap, score, rank: { before: ri1.index === ri0.index ? ri0.progress : 0, after: ri1.progress, name: ri1.rank, up: ri1.index > ri0.index }, unlocks: [...unlocks, ...(final ? ['PAINT: Shadow Line', 'HUD THEME: Crimson', ...(bonus ? ['CAMPAIGN COMPLETE: +5 TOKENS'] : [])] : [])], mission: m, saved, retry, next, final });
   }
 
   // ------------------------------------------------------------------ pause
   onKey(e) {
-    if (e.code === 'Escape' && this.game && this.game.paused) { if (this.screens.current === 'pause') this.togglePause(); else this.showPause(); }
+    if ((e.code === 'Escape' || e.code === 'KeyP') && this.game && this.game.paused) { if (this.screens.current === 'pause') this.togglePause(); else if (e.code === 'Escape') this.showPause(); }
     if (e.code === 'Escape' && this.replay) this.exitReplay();
   }
   togglePause() {
     const g = this.game; if (!g || g.ended && g.endTimer < 0.4) return; g.paused = !g.paused;
-    if (g.paused) { this.audio.setEngine(false); this.audio.setAmbience('off'); this.showPause(); if (document.pointerLockElement) document.exitPointerLock(); }
-    else { this.screens.clear(); this.input.pressed.clear(); this.input.keys.clear(); if (g.mouseFlight) this.input.setMouseFlight(true); }
+    if (g.paused) { this.input.enabled = false; this.input.keys.clear(); this.audio.setEngine(false); this.audio.setAmbience('off'); this.showPause(); if (document.pointerLockElement) document.exitPointerLock(); }
+    else { this.screens.clear(); this.input.enabled = true; this.input.pressed.clear(); this.input.keys.clear(); if (g.mouseFlight) this.input.setMouseFlight(true); }
   }
   showPause() { this.screens.show('pause'); }
   restartMission() { const l = this.lastLaunch; if (l) this.start(l.def, l.kind, l.extra); }
@@ -146,19 +153,28 @@ class App {
         const look = this.input.poll(dt).look; this.replay.update(dt, look); scene = this.replay.scene; camera = this.replay.camera; exposure = this.replay.world.exposure;
         const u = this.replayUI.q; u('seek').value = this.replay.time; u('time').textContent = fmtTime(this.replay.time) + ' / ' + fmtTime(this.replay.rep.duration); const ln = u('line'); ln.classList.toggle('hidden', this.replay.lineT <= 0); ln.textContent = this.replay.line;
       } else if (this.game) {
-        this.game.update(dt); scene = this.game.scene; camera = this.game.camera; exposure = this.game.exposure;
+        const g = this.game; g.update(dt);
+        if (this.game === g) { scene = g.scene; camera = g.camera; exposure = g.exposure; }   // the mission may have ended (and been disposed) during update
+        else { exposure = this.hangar.update(dt); scene = this.hangar.scene; camera = this.hangar.camera; }
       } else { exposure = this.hangar.update(dt); scene = this.hangar.scene; camera = this.hangar.camera; }
       this.renderer.toneMappingExposure = exposure;
       if (scene) this.renderer.render(scene, camera);
     } catch (e) { this.fatal(e); return; }
     requestAnimationFrame((t) => this.frame(t));
   }
-  fatal(e) {
-    console.error(e); const el = document.getElementById('fatal'); el.classList.remove('hidden');
-    el.innerHTML = `<div><h2>SHADOW LINE — RUNTIME ERROR</h2><pre>${String(e && e.stack || e).replace(/[<&]/g, '')}</pre><button class="btn" id="fatal-reload" style="pointer-events:auto">RELOAD</button></div>`;
-    document.getElementById('fatal-reload').onclick = () => location.reload();
-  }
+  fatal(e) { showFatal(e); }
 }
 
-const app = new App(); window.__app = app; window.addEventListener('error', (e) => app.fatal(e.error || e.message));
-app.boot();
+function showFatal(e, title = 'SHADOW LINE — RUNTIME ERROR', detail = String(e && e.stack || e)) {
+  console.error(e); const el = document.getElementById('fatal'); el.className = 'fatal';
+  el.innerHTML = `<div><h2>${title}</h2><pre>${detail.replace(/[<&]/g, '')}</pre><button class="btn" id="fatal-reload" style="pointer-events:auto">RELOAD</button></div>`;
+  document.getElementById('fatal-reload').onclick = () => location.reload();
+}
+
+window.addEventListener('error', (e) => showFatal(e.error || e.message));
+let app;
+try { app = new App(); } catch (e) {
+  const gl = /webgl/i.test(String(e && e.message));
+  showFatal(e, gl ? 'WEBGL IS REQUIRED' : undefined, gl ? 'Shadow Line needs WebGL2. Enable hardware acceleration in your browser settings, update your graphics drivers, or try another browser.' : undefined);
+}
+if (app) { window.__app = app; app.boot(); }

@@ -32,7 +32,7 @@ export class Radar {
       let lim = this.disabled ? 0 : this.range * (inCone ? 1 : 0.38);
       if (!e.isGround && e.pos.y - groundY(e.pos.x, e.pos.z) < 60) lim *= 0.65;
       let c = this.byId.get(e.id);
-      if (!c) { c = { entity: e, off: 0, range, az: 0, el: 0, cls: 'unknown', quality: 1, stale: false, lastSeen: 0, hidden: 0, jx: 0, jy: 0 }; this.byId.set(e.id, c); }
+      if (!c) { c = { entity: e, off: 0, range, az: 0, el: 0, cls: 'unknown', quality: 1, stale: true, lastSeen: 99, hidden: 0, jx: 0, jy: 0 }; this.byId.set(e.id, c); }
       c.hidden -= dt;
       if (this.severity > 0 && Math.random() < this.severity * dt * 1.3) c.hidden = rand(0.2, 0.8);
       let vis = range < lim && c.hidden <= 0;

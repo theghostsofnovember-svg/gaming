@@ -6,6 +6,15 @@ import { clamp, rand, DEG } from '../util/math.js';
 const G = 9.81;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
 
+/** Smallest missile-target distance over the last step (swept, so the fuse does not depend on frame rate). */
+function closestApproach(m, e, dt) {
+  const rx = m.pos.x - e.pos.x, ry = m.pos.y - e.pos.y, rz = m.pos.z - e.pos.z;
+  const vx = (m.vel.x - (e.vel ? e.vel.x : 0)) * dt, vy = (m.vel.y - (e.vel ? e.vel.y : 0)) * dt, vz = (m.vel.z - (e.vel ? e.vel.z : 0)) * dt;
+  const px = rx - vx, py = ry - vy, pz = rz - vz, l2 = vx * vx + vy * vy + vz * vz;
+  const t = l2 > 1e-6 ? Math.min(1, Math.max(0, -(px * vx + py * vy + pz * vz) / l2)) : 1;
+  return Math.hypot(px + vx * t, py + vy * t, pz + vz * t);
+}
+
 /**
  * Cannon, air-to-air missiles and flares. Game hooks: damage(entity, amt, owner, kind), explosion(pos, size, owner),
  * entities() -> live damageable entities, groundY(x,z), audio, diff().
@@ -23,8 +32,7 @@ export class Weapons {
 
   reset() {
     for (const m of this.missiles) this.scene.remove(m.mesh);
-    this.bullets.length = 0; this.missiles.length = 0; this.flares.length = 0;
-    this.stats = { shots: 0, hits: 0, launched: 0, missileHits: 0, flaresDropped: 0 }; this.lastPlayerMissile = null;
+    this.bullets.length = 0; this.missiles.length = 0; this.flares.length = 0; this.lastPlayerMissile = null;
   }
 
   // ---------- cannon
@@ -159,7 +167,7 @@ export class Weapons {
       // propulsion
       if (m.age < m.boost) m.speed = Math.min(560, m.speed + 190 * dt); else m.speed = Math.max(0, m.speed - (14 + m.speed * 0.045) * dt);
       m.vel.copy(m.dir).multiplyScalar(m.speed); m.pos.addScaledVector(m.vel, dt);
-      m.mesh.position.copy(m.pos); m.mesh.lookAt(_a.copy(m.pos).add(m.dir)); m.mesh.userData.flame.visible = m.age < m.boost;
+      m.mesh.position.copy(m.pos); m.mesh.lookAt(_a.copy(m.pos).sub(m.dir));   // model nose is -Z, lookAt aims +Z m.mesh.userData.flame.visible = m.age < m.boost;
       m.trail -= dt;
       if (m.trail <= 0) {
         m.trail = 0.018;
@@ -171,7 +179,7 @@ export class Weapons {
       let boom = false, victim = null;
       for (const e of entities) {
         if (!e.alive || e === m.owner && m.age < 2.5) continue;
-        const dd = e.pos.distanceTo(m.pos);
+        const dd = closestApproach(m, e, dt);
         const fuse = (m.target === e ? 24 : 12) + e.radius * 0.6;
         if (dd < fuse && m.age > 0.25) { boom = true; victim = e; break; }
       }

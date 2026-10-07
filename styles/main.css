@@ -148,6 +148,7 @@ kbd { font-family: var(--mono); border: 1px solid var(--line); padding: 1px 7px;
 .hud-objectives ul { list-style: none; margin: 0; padding: 0; } .hud-objectives li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; opacity: .75; } .hud-objectives li.current { opacity: 1; color: #fff; }
 .hud-objectives li i { width: 8px; height: 8px; border: 1px solid currentColor; flex: none; transform: rotate(45deg); } .hud-objectives li.complete { color: var(--hud); opacity: .8; } .hud-objectives li.complete i { background: var(--hud); } .hud-objectives li.failed { color: var(--red); text-decoration: line-through; } .hud-objectives li.failed i { background: var(--red); }
 .hud-objectives em { color: var(--amber); font-style: normal; margin-left: auto; }
+@media (max-height: 800px) { .hud-objectives h5, .hud-objectives ul.sec { display: none; } }   /* keep the panel clear of the altitude tape on short screens */
 .hud-clock { position: absolute; right: clamp(10px, 1.6vw, 28px); bottom: clamp(10px, 1.5vw, 24px); font-size: 12px; letter-spacing: 0.18em; opacity: 0.8; }
 .hud-warning { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); text-align: center; }
 .hud-warning .w { font-size: clamp(22px, 2.6vw, 38px); letter-spacing: 0.24em; font-weight: 700; padding: 2px 18px; animation: wblink linear infinite; } .hud-warning .w.crit { color: #ff3b30; text-shadow: 0 0 18px #ff3b30; } .hud-warning .w.warn { color: var(--amber); text-shadow: 0 0 14px var(--amber); font-size: clamp(16px, 1.8vw, 26px); }
@@ -185,7 +186,8 @@ kbd { font-family: var(--mono); border: 1px solid var(--line); padding: 1px 7px;
 body.reduced-motion .pt-bg, body.reduced-motion .pt-fig, body.reduced-motion .pt-glow, body.reduced-motion .pt-noise, body.reduced-motion .screen, body.reduced-motion .press { animation: none !important; }
 body.reduced-motion .btn { transition: none; }
 
-.fatal { position: absolute; inset: 0; display: grid; place-items: center; background: #05090d; color: #ffb4ab; padding: 30px; font-family: var(--mono); pointer-events: auto; }
+.fatal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #05090d; color: #ffb4ab; padding: 30px; font-family: var(--mono); pointer-events: auto; overflow: auto; user-select: text; }
+.fatal pre { white-space: pre-wrap; max-width: 90vw; font-size: 13px; }
 
 @media (max-width: 960px) { .split, .intel-grid, .debrief-card { grid-template-columns: 1fr; overflow: auto; } .form { grid-template-columns: 1fr; } .hud-objectives { width: 44vw; } .brief-info { width: 54vw; } .pilot-card { display: none; } }
 @media (max-height: 720px) { .menu-col { gap: 6px; } .btn { padding: 8px 18px; } .menu-col .brand { margin-bottom: 12px; } }
@@ -329,7 +331,7 @@ body.playing .fs-btn { display: none !important; }
   .screen { padding-top: 62px; } .screen.brief { padding: 0; }
   .back-bar, .fs-btn { top: 10px; } .back-bar { right: calc(max(14px, env(safe-area-inset-right)) + 52px); }
   .menu-screen { flex-direction: column; } .menu-col { width: 100%; } .menu-foot { position: static; margin-top: 12px; } .foot-pilot { display: inline; } .pilot-card { display: none; }
-  .split { grid-template-columns: 1fr; padding-top: 0; overflow: visible; } .map-wrap { height: 62vw; min-height: 240px; } .side-col { overflow: visible; }
+  .split { grid-template-columns: 1fr; padding-top: 0; overflow: visible; } .map-wrap { height: min(62vw, 58vh); min-height: 200px; } .side-col { overflow: visible; }
   .intel-grid, .debrief-card, .loadout-grid, .form { grid-template-columns: 1fr; } .debrief-card, .intel-grid { overflow: visible; }
   .big-center { max-height: none !important; margin: 0 auto !important; justify-content: flex-start !important; } .scroll { overflow: visible !important; max-height: none !important; }
   .brief-info { width: 62vw; top: 40px; } .brief-info .line { padding: 3px 0; font-size: 11px; } .brief-log { min-width: 0; max-width: 90vw; font-size: 11px; bottom: 56px; } .brief-title { font-size: 10px; letter-spacing: 0.2em; width: 80vw; }

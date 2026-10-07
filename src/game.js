@@ -17,6 +17,7 @@ import { CameraRig, CAMERA_IDS } from './camera/cameras.js';
 import { Recorder } from './replay/replay.js';
 import { clamp, rand, DEG, wrapPi } from './util/math.js';
 import { Settings } from './settings/settings.js';
+import { disposeTree } from './util/dispose.js';
 
 const ENEMY = enemiesData.types;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _eu = new THREE.Euler();
@@ -116,7 +117,7 @@ export class Game {
   }
   /** Takes an entity out of the simulation and scene (despawned, landed or phase change) without destroying it. */
   removeEntity(e) {
-    if (e.model) this.scene.remove(e.model.root);
+    if (e.model) { this.scene.remove(e.model.root); disposeTree(e.model.root); }
     for (const [list, item] of [[this.entities, e], [this.pilots, e.pilot], [this.units, e.unit]]) { const i = list.indexOf(item); if (i >= 0) list.splice(i, 1); }
   }
   order(id, order, args = {}) {
@@ -164,7 +165,7 @@ export class Game {
   applyTravel(spec) {
     const keep = new Set(['player', 'wingman', ...(spec.keep || [])]);
     for (const e of [...this.entities]) if (!keep.has(e.id)) { e.landed = true; this.removeEntity(e); }
-    for (const w of this.wrecks) if (!w.nomodel) this.scene.remove(w.e.model.root);
+    for (const w of this.wrecks) if (!w.nomodel) { this.scene.remove(w.e.model.root); disposeTree(w.e.model.root); }
     this.wrecks.length = 0; this.burners.length = 0; this.weapons.reset(); this.cine = null; this.camRig.override = null;
     const zones = spec.zones || [{ id: 'boundary', type: 'boundary', pos: [spec.pos[0], 0, spec.pos[2] - 10000], radius: 40000, label: 'OPERATIONS AREA' }];
     this.mission.env = spec.env; this.mission.base = null; this.director.m.zones = zones; this.director.m.waypoints = spec.waypoints || []; this.director.outsideT = 0;
@@ -435,7 +436,7 @@ export class Game {
       const gy = this.world.groundY(e.pos.x, e.pos.z);
       if (e.pos.y < gy + 2 || w.t > 7) {
         if (e.pos.y < gy + 2 && !w.landed) { w.landed = true; this.particles.explosion(new THREE.Vector3(e.pos.x, gy + 2, e.pos.z), 1.0); this.audio.play('explosion', clamp(1 - e.pos.distanceTo(this.camera.position) / 6000, 0, 0.7)); }
-        if (!w.nomodel) this.scene.remove(e.model.root); if (w.t > 7 || w.landed) { this.wrecks.splice(i, 1); }
+        if (w.t > 7 || w.landed) { if (!w.nomodel) { this.scene.remove(e.model.root); disposeTree(e.model.root); } this.wrecks.splice(i, 1); }
       }
     }
   }
@@ -562,7 +563,7 @@ export class Game {
     document.body.classList.remove('aim-mouse', 'playing'); this.input.touch?.reset();
     this.hud.show(false); this.hud.cinematic(false); this.comms.clear(); this.audio.setEngine(false); this.audio.setAmbience('off'); this.input.setMouseFlight(false);
     this.input.enabled = false; window.speechSynthesis?.cancel?.();
-    this.scene.traverse((o) => { o.geometry?.dispose?.(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.map?.dispose?.(); m.dispose?.(); }); });
-    this.world.clear(); this.scene.clear();
+    this.hud.fade(false);
+    disposeTree(this.scene); this.world.clear(); this.scene.clear();
   }
 }
