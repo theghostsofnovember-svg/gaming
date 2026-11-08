@@ -11,11 +11,17 @@ A single-file WebGL2 generator (Three.js r128) for an 8 km × 8 km battlefield m
 - **Shading:** limestone strata on cliffs, scree, snow, forest floor, field patchwork with hedgerows, a dirt road with ruts, a gravel riverbed, and animated water.
 
 ### Detail
+- **PBR textures:** CC0 textures from Poly Haven (meadow, forest floor, limestone, dirt road, fort wall, village stone, bark), loaded at runtime with anti-tiling and triplanar rock mapping. Shading falls back to procedural if they cannot be loaded.
+- **Post-processing:** FXAA, SSAO, sun shafts, bloom-lite, colour grading and a vignette. Mist forms on the mid slopes, and the default sun is golden hour. Snow appears only on maps above about 1900 m.
 - **Procedural trees:** Atlas cedar, Aleppo pine, holm oak and juniper. Each has recursive branches and leaf cards from a generated atlas, 3 LODs, wind sway and translucency.
-- **GPU grass:** up to 600k instanced clumps around the camera, with wind, dry/green variation and poppies.
-- **Rocks and boulders:** placed on scree and rocky slopes.
+- **GPU grass and wildflowers:** up to 600k instanced clumps around the camera, with wind and dry/green variation, plus daisies, poppies and buttercups.
+- **Rocks and boulders:** placed on scree and rocky slopes. Road ruts collect puddles.
 - **Lighting:** a dynamic sun shadow map near the camera combined with the baked terrain shadow, plus procedural clouds.
-- **Settlements:** a stone village (dechra), a hexagonal French outpost (watchtowers, barracks, HQ, comms tower, trucks), a stone bridge, and an overwatch ruin.
+- **Settlements:**
+  - A stone village (dechra).
+  - A hexagonal French outpost: 8 m walls with ivy, corner towers with roofed lookouts, watchtowers, barracks, HQ, a comms tower and trucks.
+  - A stone bridge and an overwatch ruin.
+- **Props:** crates, barrels, ammo boxes, a market awning, a cart, sandbag posts, a line of anti-tank hedgehogs and a tent camp.
 - **Capture points:** A–D, shown with an in-world HUD.
 
 ### Map and play
