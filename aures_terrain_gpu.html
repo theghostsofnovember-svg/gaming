@@ -130,12 +130,18 @@ const FOG=`float hf=1.+(1.-clamp(vP.y/uHs*2.,0.,1.))*1.5;float fgf=1.-exp(-dist*
 vec3 fc=mix(uHor,uSunCol*.35,pow(max(dot(-V,uSun),0.),6.)*.6);col=mix(col,fc,fgf);col=pow(aces(col),vec3(1./2.2));`;
 const LITU='uniform vec3 uSun,uSunCol,uHor,uZen;uniform float uHs,uFog,uAmb,uN,uT,uNight,uMist;';
 /* planar (anti-tiling, two scales) and triplanar texture sampling; returns linear albedo + world-space normal offset */
-const TXF=`vec3 TX(sampler2D sd,sampler2D sn,vec2 uv,float bm,out vec3 pn){vec2 u2=mat2(.8,.6,-.6,.8)*uv*.37+.29;
-vec3 a=mix(texture2D(sd,uv).rgb,texture2D(sd,u2).rgb,bm);vec2 n=mix(texture2D(sn,uv).rg,texture2D(sn,u2).rg,bm)*2.-1.;pn=vec3(n.x,0.,n.y);return pow(a,vec3(2.2));}
+/* FD (0 near, 1 far) cross-fades to a 9x larger, rotated sampling so tiling does not show as a grid at range */
+const TXF=`float FD=0.;
+vec3 TX(sampler2D sd,sampler2D sn,vec2 uv,float bm,out vec3 pn){vec2 u2=mat2(.8,.6,-.6,.8)*uv*.37+.29,u3=mat2(.6,-.8,.8,.6)*uv*.11+.53;
+vec3 a=mix(texture2D(sd,uv).rgb,texture2D(sd,u2).rgb,bm);vec2 n=mix(texture2D(sn,uv).rg,texture2D(sn,u2).rg,bm)*2.-1.;
+if(FD>0.){a=mix(a,mix(texture2D(sd,u3).rgb,texture2D(sd,u2).rgb,.35),FD);n=mix(n,texture2D(sn,u3).rg*2.-1.,FD);}
+pn=vec3(n.x,0.,n.y);return pow(a,vec3(2.2));}
+vec3 T3(sampler2D s,vec3 p,vec3 w){return texture2D(s,p.zy).rgb*w.x+texture2D(s,p.xz).rgb*w.y+texture2D(s,p.xy).rgb*w.z;}
 vec3 TRI(sampler2D sd,sampler2D sn,vec3 p,vec3 n,out vec3 pn){vec3 w=pow(abs(n),vec3(4.));w/=w.x+w.y+w.z+1e-5;
-vec3 ax=texture2D(sd,p.zy).rgb,ay=texture2D(sd,p.xz).rgb,az=texture2D(sd,p.xy).rgb;
+vec3 a=T3(sd,p,w);
+if(FD>0.)a=mix(a,mix(T3(sd,p*.12+vec3(.31,.17,.71),w),a,.3),FD);
 vec2 nx=texture2D(sn,p.zy).rg*2.-1.,ny=texture2D(sn,p.xz).rg*2.-1.,nz=texture2D(sn,p.xy).rg*2.-1.;
-pn=vec3(0.,nx.y,nx.x)*w.x+vec3(ny.x,0.,ny.y)*w.y+vec3(nz.x,nz.y,0.)*w.z;return pow(ax*w.x+ay*w.y+az*w.z,vec3(2.2));}`;
+pn=(vec3(0.,nx.y,nx.x)*w.x+vec3(ny.x,0.,ny.y)*w.y+vec3(nz.x,nz.y,0.)*w.z)*(1.-FD*.5);return pow(a,vec3(2.2));}`;
 /* normal mapping without tangents (screen-space cotangent frame) */
 const PN=`vec3 PN(vec3 N,vec3 p,vec2 uv,vec3 m){vec3 q0=dFdx(p),q1=dFdy(p);vec2 s0=dFdx(uv),s1=dFdy(uv);vec3 S=q0*s1.t-q1*s0.t,T=-q0*s1.s+q1*s0.s;float l=max(dot(S,S),dot(T,T));if(l<1e-24)return N;float k=inversesqrt(l);return normalize(S*k*m.x+T*k*m.y+N*max(m.z,.3));}`;
 /* drifting mist band on the mid slopes */
@@ -203,14 +209,31 @@ if(d>0.){float e=min(.3*d,.3);h-=e;sed+=e;}else{float dp=min(-d*.3,sed);h+=dp;se
 float ds=sed*.03;sed-=ds;h+=ds;dep+=ds;w*=.97;
 gl_FragColor=vec4(h,w,sed,dep);}`,{uS:{value:null},uN:{value:0},uCell:{value:1},uKc:{value:10},uRain:{value:.03}});
 /* post-erosion sculpt: village terraces, fort pad, roads (cut & fill), river channel */
-const sculptM=pm(SMP+`uniform float uTs,uRw;uniform vec4 uFt,uVl;uniform vec2 uSeed;${GN}${PL('uRd',RDN)}${PL('uRc',RN)}
+const sculptM=pm(SMP+`uniform float uTs,uRw,uMt,uHW;uniform vec4 uFt,uVl,uPl,uPh;uniform vec2 uSeed;${GN}${PL('uRd',RDN)}${PL('uRc',RN)}
 void main(){vec2 c=floor(gl_FragCoord.xy);vec4 s=S(c);vec2 uv=c/(uN-1.);float h=s.r;
 float dv=length(uv-uVl.xy)/uVl.z+nz(uv*80.)*.08;
 if(dv<1.7){float q=h/uTs;float hq=(floor(q)+sm(.62,1.,fract(q)))*uTs;h=mix(h,hq,sm(1.7,1.,dv));}
+/* crags on the border massifs, added after erosion so they stay sharp */
+{vec2 q=abs(uv-.5);float bm=max(q.x,q.y)+nz(uv*4.+3.)*.07+nz(uv*11.+1.)*.02;float mm=sm(.3,.47,bm);
+ float cr=0.,a=.5,f=22.;for(int i=0;i<4;i++){cr+=a*(1.-abs(nz(uv*f+float(i)*7.3)));f*=2.1;a*=.5;}
+ h+=mm*uMt*(cr-.42)*.045*sm(.2,.55,h);}
+/* mesa: flat caprock, upper cliff, ledge, lower cliff, concave scree apron (post-erosion so the cliffs survive) */
+{vec2 dv2=uv-uPl.xy;vec2 dn=dv2/max(length(dv2),1e-5);
+ /* direction-based noise: lobes, spurs and radial gullies that cut every band */
+ float pr=length(dv2)/uPl.z+nz(dn*2.2+7.)*.22+nz(dn*6.+3.)*.09+pow(abs(nz(dn*19.+11.)),.6)*.05*sign(nz(dn*19.+11.))+nz(uv*9.+31.)*.06+nz(uv*80.+2.)*.008;
+ float lr=.2+.24*(nz(dn*4.+5.)*.5+.5),ldw=.02+.03*(nz(dn*5.+1.)*.5+.5);
+ float top=uPh.x+.003*nz(uv*14.),dH=uPh.x-uPh.y,t=pr-1.,c1=.04,ld=ldw,c2=.035,tw=.34,tg=top,w=1.;
+ if(t>=0.){if(t<c1)tg=top-dH*lr*sm(0.,1.,t/c1);
+  else if(t<c1+ld)tg=top-dH*(lr+.05*(t-c1)/ld);
+  else if(t<c1+ld+c2)tg=top-dH*(lr+.05+(.57-lr)*sm(0.,1.,(t-c1-ld)/c2));
+  else{float u=clamp((t-c1-ld-c2)/tw,0.,1.);tg=mix(top-dH*.62,h,1.-(1.-u)*(1.-u));w=1.-sm(.75,1.,u);}
+  w*=1.-sm(top+.01,top+.06,h);}
+ h=mix(h,tg,w*step(t,c1+ld+c2+tw));}
 h=mix(h,uFt.w,sm(uFt.z*1.9,uFt.z*1.25,length(uv-uFt.xy)));
-vec4 rd=pl_uRd(uv);h=mix(h,rd.z,(1.-sm(uRw,uRw*3.4,rd.x))*(1.-rd.w));
+/* roads: cut & fill with 1:1.5 embankments sized by the height difference (no knife-edge walls) */
+vec4 rd=pl_uRd(uv);float dzm=abs(rd.z-h)*uHW,rw2=uRw+dzm*.4;h=mix(h,rd.z,(1.-sm(rw2,rw2+uRw*2.4+dzm*1.5,rd.x))*(1.-rd.w));
 vec4 rv=pl_uRc(uv);float ch=1.-sm(rv.z,rv.z*2.6,rv.x);h=min(h,mix(h,rv.w-.0012*(1.-sm(0.,rv.z,rv.x)),ch));
-gl_FragColor=vec4(h,s.g,s.b,1.);}`,{uS:{value:null},uN:{value:0},uTs:{value:.003},uRw:{value:.0006},uFt:{value:new THREE.Vector4()},uVl:{value:new THREE.Vector4()},uSeed:{value:new THREE.Vector2()},uRd:{value:V4(RDN)},uRc:{value:V4(RN)}});
+gl_FragColor=vec4(h,s.g,s.b,1.);}`,{uS:{value:null},uN:{value:0},uTs:{value:.003},uRw:{value:.0006},uMt:{value:1},uHW:{value:.17},uPl:{value:new THREE.Vector4()},uPh:{value:new THREE.Vector4()},uFt:{value:new THREE.Vector4()},uVl:{value:new THREE.Vector4()},uSeed:{value:new THREE.Vector2()},uRd:{value:V4(RDN)},uRc:{value:V4(RN)}});
 /* hi-res distance masks (2048²): road, river channel (signed), fort, village — in metres */
 const maskM=pm(`uniform float uMR;uniform vec4 uFt,uVl;${PL('uRd',RDN)}${PL('uRc',RN)}
 void main(){vec2 uv=gl_FragCoord.xy/uMR;vec4 rd=pl_uRd(uv),rv=pl_uRc(uv);
@@ -332,7 +355,7 @@ alb=mix(alb,dirt,dirtM*.8);alb=mix(alb,scree,screeM*.8);
 alb=mix(alb,setC,setM);alb=mix(alb,dirt*.9,shoulder*.5);
 alb=mix(alb,rock,rockM*(1.-roadM));alb=mix(alb,roadC,roadM);alb=mix(alb,bed,bedM);
 float pud=0.;
-if(uTx>.5){float bm=smoothstep(.3,.7,n1+(n2-.5)*.5);float mv=(.78+.44*n1)*(.9+.2*n2);
+if(uTx>.5){FD=smoothstep(50.,260.,dist*8.);float bm=smoothstep(.3,.7,n1+(n2-.5)*.5);float mv=(.78+.44*n1)*(.9+.2*mix(n2,.5,FD));
  vec3 nG,nF,nD,nR;vec3 tG=TX(uTG,uTGn,pm/2.6,bm,nG),tF=TX(uTF,uTFn,pm/2.2,bm,nF),tD=TX(uTD,uTDn,pm/2.,bm,nD),tR=TRI(uTR,uTRn,vP*(8./7.),Ng,nR);
  vec3 gT=tG*mix(vec3(1.15,1.,.66),vec3(.95,1.05,.9),moist)*mv;
  vec3 fT=mix(tF,tG*.7,.3)*mv;
@@ -683,14 +706,16 @@ function makeLayout(seed){const r=mul(seed*7919+13),J=a=>(r()-.5)*2*a;
  const rivCan=catmull(rc,4);let ci=0;rivCan.forEach((p,i)=>{if(Math.abs(p[1]-yc)<Math.abs(rivCan[ci][1]-yc))ci=i});const C=rivCan[ci];
  const rav=[],mkRav=(sx,sy,ey,dep,wd)=>{let bi=0;rivCan.forEach((p,i)=>{if(Math.abs(p[1]-ey)<Math.abs(rivCan[bi][1]-ey))bi=i});const E=rivCan[bi];
   const cp=[[sx,sy]];for(let k=1;k<4;k++){const t=k/4;cp.push([lerp(sx,E[0],t)+J(.03),lerp(sy,E[1],t)+J(.03)])}cp.push([E[0],E[1]]);
-  rav.push(catmull(cp,8).map(p=>T(p)).map((p,i,a)=>{const t=i/(a.length-1);return [p[0],p[1],dep*ss(0,.35,t)*(1-.35*t)+.004,wd*(.7+.6*t)]}))};
+  rav.push(catmull(cp,8).map(p=>T(p)).map((p,i,a)=>{const t=i/(a.length-1);return [p[0],p[1],dep*ss(0,.35,t)*(1-.35*t)+.004,wd*(.7+.6*t)]}));return cp};
  const yv=V[1],yf=Pc[1];
- mkRav(-.06,yv+.17+J(.03),yv+.12,.07+r()*.03,.009);mkRav(.02+J(.03),yv-.19+J(.03),yv-.14,.06+r()*.03,.008);
+ const wcp=mkRav(-.06,yv+.17+J(.03),yv+.12,.07+r()*.03,.009);mkRav(.02+J(.03),yv-.19+J(.03),yv-.14,.06+r()*.03,.008);
  mkRav(1.06,yf+Pr+.07+J(.02),yf+Pr*.6,.08+r()*.03,.009);mkRav(1.04,yf-Pr-.07+J(.02),yf-Pr*.5,.07+r()*.03,.008);
  const Pl=[.66+J(.04),.13+J(.03)],ex=Pc[0]-Pr-.05,ix=Pc[0]-Pr+.03;
- const rd=[[-.35,V[1]+.05+J(.05)],[.06,V[1]+.03+J(.03)],[V[0]-.03,V[1]+.008],[V[0],V[1]],[V[0]+.03,V[1]-.012],[V[0]+.07,V[1]-.03+J(.01)],[C[0]-.03,C[1]+.006],[C[0],C[1]],[C[0]+.03,C[1]-.008]];
+ /* exits follow the ravine (west) and the wadi (south) instead of climbing the border massifs */
+ const rAt=y=>{let bi=0;rivCan.forEach((p,i)=>{if(Math.abs(p[1]-y)<Math.abs(rivCan[bi][1]-y))bi=i});return rivCan[bi]};
+ const rd=[[wcp[0][0]-.3,wcp[0][1]],[wcp[0][0],wcp[0][1]],[wcp[1][0],wcp[1][1]],[(wcp[1][0]+V[0])/2,(wcp[1][1]+V[1])/2+.01],[V[0]-.03,V[1]+.008],[V[0],V[1]],[V[0]+.03,V[1]-.012],[V[0]+.07,V[1]-.03+J(.01)],[C[0]-.03,C[1]+.006],[C[0],C[1]],[C[0]+.03,C[1]-.008]];
  for(let k=0;k<5;k++)rd.push([lerp(ex,ix,k/4),Pc[1]-.015+(k%2?.04:-.04)]);
- rd.push([F[0]-.03,F[1]],[F[0],F[1]],[F[0]+.03,F[1]-.01],[F[0]+.07,F[1]-.11],[Pl[0]+.03,Pl[1]+.07],[Pl[0],Pl[1]],[Pl[0]+.06,-.35]);
+ rd.push([F[0]-.03,F[1]],[F[0],F[1]],[F[0]+.03,F[1]-.01],[F[0]+.07,F[1]-.11],[Pl[0]+.03,Pl[1]+.07],[Pl[0],Pl[1]],[rAt(.04)[0]+.035,.04],[rAt(-.12)[0]+.035,-.12],[rAt(-.35)[0]+.035,-.35]);
  const L={seed,V:T(V),Vh:T([V[0]-.035,V[1]+J(.01)]),F:T(F),Pc:T(Pc),Pr,Pl:T(Pl),D:T([.2+J(.03),.17+J(.03)]),Dr:.075+J(.015),OP:T([V[0]+.06+J(.02),V[1]+.26+J(.02)]),Ms:T([.5+J(.12),1.02]),Vr:.022,Fr:.015};
  L.riv=clipRes(rivCan.map(T),RN);L.rav=rav.map(p=>clipRes(p,RVN));L.road=clipRes(catmull(rd,10).map(T),RDN);L.C=T(C);
  return L}
@@ -722,7 +747,7 @@ function buildVeg(){
  const step=Math.max(1,Math.round(10/c)),area=(step*c/10)**2;
  for(let j=3;j<N-3;j+=step)for(let i=3;i<N-3;i+=step){
   const fi=i+(rnd()-.5)*step,fj=j+(rnd()-.5)*step,k=(fj|0)*N+(fi|0),f=BIO[4*k+2]/255,g=BIO[4*k+1]/255,rk=BIO[4*k]/255,h=H[k];
-  if(rnd()>(Math.pow(f,1.3)*.8+g*.012+rk*.004)*dens*area)continue;
+  if(rnd()>(Math.pow(f,1.3)*.8+g*.05*ss(.58,.78,vnoise(fi/16,fj/16,9))+rk*.004)*dens*area)continue;
   const wx=U2W(fi/(N-1)),wz=U2W(fj/(N-1));if(block(wx,wz))continue;
   const nf=cl((H[k+N]-H[k-N])*hm/(2*c)*3,-1,1);
   const w=[ss(.36,.48,h)*(1-ss(.8,.9,h))*(1+.6*nf)*(.4+vnoise(fi/45,fj/45,1)),(1-ss(.4,.52,h))*ss(.08,.18,h)*1.2*(.4+vnoise(fi/45,fj/45,2)),ss(.18,.28,h)*(1-ss(.6,.7,h))*.9*(.4+vnoise(fi/45,fj/45,3)),(ss(.58,.74,h)+rk*.7+(1-f)*.35)*.6*(.3+vnoise(fi/45,fj/45,4))];
@@ -948,6 +973,9 @@ function generate(){$('msg').style.display='block';setTimeout(()=>{
  for(let i=1;i<lv.length;i++)lv[i]=Math.min(lv[i],lv[i-1]);for(let it=0;it<4;it++)lv=lv.map((v,i,a)=>i==0||i==a.length-1?v:(a[i-1]+2*v+a[i+1])/4);lv=lv.map(v=>v-1.5/hm);
  L.rivC=L.riv.map((p,i)=>[p[0],p[1],p[4],lv[i]]);
  let Fh=0,fc=0;for(let a=0;a<24;a++)for(const rr of [0,.4,.8,1.2]){Fh+=sUV(H0,L.F[0]+Math.cos(a*.2618)*L.Fr*rr,L.F[1]+Math.sin(a*.2618)*L.Fr*rr);fc++}L.Fh=Fh/fc;
+ /* mesa reference levels: caprock = mean of the inner disc, base = 30th percentile of the surrounding ring */
+ { let st=0,sn=0;const ring=[];for(let a=0;a<48;a++){const ca=Math.cos(a/48*6.283),sa=Math.sin(a/48*6.283);for(const rr of [0,.25,.5,.7]){st+=sUV(H0,L.Pc[0]+ca*L.Pr*rr,L.Pc[1]+sa*L.Pr*rr);sn++}ring.push(sUV(H0,L.Pc[0]+ca*L.Pr*1.6,L.Pc[1]+sa*L.Pr*1.6))}
+  ring.sort((a,b)=>a-b);const top=st/sn,base=Math.min(ring[Math.floor(ring.length*.3)],top-160/hm);L.Pt=top;L.Pb=base;L.Fh=top}
  let rh=L.road.map(p=>sUV(H0,p[0],p[1]));
  L.road.forEach((p,i)=>{const d=Math.hypot(p[0]-L.F[0],p[1]-L.F[1]);if(d<L.Fr*1.6)rh[i]=lerp(L.Fh,rh[i],ss(L.Fr*1.1,L.Fr*1.6,d))});
  for(let it=0;it<10;it++)rh=rh.map((v,i,a)=>i==0||i==a.length-1?v:(a[i-1]+2*v+a[i+1])/4);
@@ -955,7 +983,7 @@ function generate(){$('msg').style.display='block';setTimeout(()=>{
  L.deck=rh.slice();
  for(let i=0;i<RDN;){if(!L.bridge[i]){i++;continue}let j=i;while(j+1<RDN&&L.bridge[j+1])j++;const a=rh[Math.max(0,i-1)],c=rh[Math.min(RDN-1,j+1)],q=plDist(L.rivC,L.road[i][0],L.road[i][1]),dk=Math.max(a,c,L.rivC[q.i][3]+7/hm);
   for(let k=i;k<=j;k++){L.deck[k]=dk;rh[k]=dk}for(let k=1;k<=3;k++){if(i-k>=0)rh[i-k]=lerp(dk,rh[i-k],k/4);if(j+k<RDN)rh[j+k]=lerp(dk,rh[j+k],k/4)}i=j+1}
- const su=sculptM.uniforms;su.uN.value=N;su.uS.value=rtF.texture;su.uTs.value=3.5/hm;su.uRw.value=5/WM;su.uSeed.value.copy(sd);
+ const su=sculptM.uniforms;su.uN.value=N;su.uS.value=rtF.texture;su.uTs.value=3.5/hm;su.uRw.value=5/WM;su.uSeed.value.copy(sd);su.uMt.value=+$('mt').value;su.uHW.value=hm/WM;su.uPl.value.set(L.Pc[0],L.Pc[1],L.Pr,0);su.uPh.value.set(L.Pt,L.Pb,0,0);
  su.uFt.value.set(L.F[0],L.F[1],L.Fr,L.Fh);su.uVl.value.set(L.V[0],L.V[1],L.Vr,0);
  setArr(su.uRd,L.road.map((p,i)=>[p[0],p[1],rh[i],L.bridge[i]?1:0]));setArr(su.uRc,L.rivC);
  pass(sculptM,oth);[rtF,oth]=[oth,rtF];cur=rtA===rtF?rtB:rtA;
