@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "0.1.0",
+	"Version": 2,
+	"VersionName": "0.2.0",
 	"FriendlyName": "Nawat Kernel",
 	"Description": "Drop-in narrative, squad AI and presentation kernel for FPS/TPS projects.",
 	"Category": "Gameplay",
@@ -14,6 +14,27 @@
 			"Name": "NawatCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NawatNarrative",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NawatAI",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NawatPresentation",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "EnhancedInput",
+			"Enabled": true
 		}
 	]
 }
