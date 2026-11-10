@@ -5,3 +5,7 @@ DerivedDataCache/
 Saved/
 .vs/
 *.sln
+
+# Packaging and one-click build output
+/dist/
+/Tools/Build/
