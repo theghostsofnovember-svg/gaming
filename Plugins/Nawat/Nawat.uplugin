@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Nawat Kernel",
+	"Description": "Drop-in narrative, squad AI and presentation kernel for FPS/TPS projects.",
+	"Category": "Gameplay",
+	"CreatedBy": "The Ghosts Of November",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "NawatCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
